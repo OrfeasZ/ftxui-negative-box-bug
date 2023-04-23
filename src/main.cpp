@@ -1,39 +1,49 @@
 #include <iostream>
 
+#include "ftxui/component/component.hpp"
 #include "ftxui/dom/elements.hpp"
-#include "ftxui/screen/screen.hpp"
-#include "ftxui/screen/string.hpp"
+#include "ftxui/component/screen_interactive.hpp"
+
+#include <thread>
 
 int main(void) {
   using namespace ftxui;
 
-  auto summary = [&] {
-    auto content = vbox({
-        hbox({text(L"- done:   "), text(L"3") | bold}) | color(Color::Green),
-        hbox({text(L"- active: "), text(L"2") | bold}) | color(Color::RedLight),
-        hbox({text(L"- queue:  "), text(L"9") | bold}) | color(Color::Red),
-    });
-    return window(text(L" Summary "), content);
+  auto my_graph = [](int width, int height) {
+    if (width < 0) {
+      std::cerr << "Width is <0 and I'll now crash :(" << std::endl;
+    }
+
+    return std::vector<int>(width, height / 2);
   };
 
-  auto document =  //
-      vbox({
-          hbox({
-              summary(),
-              summary(),
-              summary() | flex,
-          }),
-          summary(),
-          summary(),
-      });
+  auto main_window = Renderer([&] {
+    return window(
+      text("Outer window"),
+        hbox({
+          text("I am here to waste some space"),
+          window(
+            text("Inner window"),
+            graph(std::ref(my_graph))
+          ),
+      })      
+    );
+  });
 
-  // Limit the size of the document to 80 char.
-  document = document | size(WIDTH, LESS_THAN, 80);
+  auto screen = ScreenInteractive::Fullscreen();
 
-  auto screen = Screen::Create(Dimension::Full(), Dimension::Fit(document));
-  Render(screen, document);
+  std::atomic<bool> refresh_ui_continue = true;
+  std::thread refresh_ui([&] {
+    while (refresh_ui_continue) {
+      using namespace std::chrono_literals;
+      std::this_thread::sleep_for(0.05s);
+      screen.Post(Event::Custom);
+    }
+  });
 
-  std::cout << screen.ToString() << '\0' << std::endl;
+  screen.Loop(main_window);
+  refresh_ui_continue = false;
+  refresh_ui.join();
 
   return EXIT_SUCCESS;
 }
